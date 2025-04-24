@@ -237,10 +237,10 @@
 
                         return {
                             from: leg.name.replace('Baden, ', '') || 'N/A',
-                            to: leg.exit?.name.replace('Baden, ', '') || 'N/A',
+                            to: (leg.exit && leg.exit.name ? leg.exit.name.replace('Baden, ', '') : 'N/A'),
                             line: lineImage,
                             departure: formatTime(leg.departure),
-                            arrival: formatTime(leg.exit?.arrival),
+                            arrival: (leg.exit && leg.exit.arrival ? formatTime(leg.exit.arrival) : 'N/A'),
                             runningTime: `${Math.floor(leg.runningtime / 60)}` || 'N/A',
                             departureDelay: leg.dep_delay && leg.dep_delay !== '+0' ? leg.dep_delay : '-',
                             countdown: countdown

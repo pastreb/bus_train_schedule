@@ -230,9 +230,10 @@
                         };
 
                         // Determine the image for the line
-                        const lineImage = leg.line && imageMap[leg.type]?.[leg.line.toLowerCase().replace(' ', '')]
-                            ? `<img src="${imageMap[leg.type][leg.line.toLowerCase().replace(' ', '')]}" alt="${leg.line}" style="height: 16px;">`
-                            : leg.line || 'N/A';
+                        const lineImage = (leg.line && imageMap[leg.type] && imageMap[leg.type][leg.line.toLowerCase().replace(' ', '')])
+                        ? `<img src="${imageMap[leg.type][leg.line.toLowerCase().replace(' ', '')]}" alt="${leg.line}" style="height: 16px;">`
+                        : (leg.line || 'N/A');
+
 
                         return {
                             from: leg.name.replace('Baden, ', '') || 'N/A',

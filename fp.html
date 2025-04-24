@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #header-container {
+            position: relative;
+            width: 100%;
+            background: linear-gradient(135deg, #ffcc00, #ffd633);
+            color: #002244;
+            border: 2px solid #000;
+            box-sizing: border-box;
+            padding: 15px 0;
+        }
+        h1 {
+            margin: 0;
+            text-align: center;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        #current-time {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #002244;
+            background-color: #f2f2f2;
+            border: 2px solid #ccc;
+            padding: 6px 12px;
+            border-radius: 8px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        }
+        .tables-container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+        }
+        table {
+            width: 45%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #000;
+            margin-top: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            background-color: #ffcc00;
+        }
+        .schedule-header {
+            background-color: #003366;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: left;
+            padding: 10px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #000;
+        }
+        th {
+            background-color: #003366;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #e6f2ff;
+        }
+        tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        tr:hover {
+            background-color: #cce0ff;
+        }
+        td.delay {
+            color: red;
+            font-weight: bold;
+        }
+        .footer {
+            background-color: #cc0000;
+            color: white;
+            width: 100%;
+            text-align: center;
+            font-size: 14px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header-container">
+        <h1>Fahrplan</h1>
+        <span id="current-time"></span>
+    </div>
+    <div class="tables-container">
+        <table id="table-baden">
+            <thead>
+                <tr>
+                    <th>Von</th>
+                    <th>Nach</th>
+                    <th>Linie</th>
+                    <th>Abfahrt</th>
+                    <th>Ankunft</th>
+                    <th>Fahrzeit</th>
+                    <th>Verspätung</th>
+                    <th>Countdown</th>
+                </tr>
+            </thead>
+            <tbody id="schedule-body-baden">
+                <!-- Rows will be inserted here by JavaScript -->
+            </tbody>
+        </table>
+        <table id="table-zurich">
+            <thead>
+                <tr>
+                    <th>Von</th>
+                    <th>Nach</th>
+                    <th>Linie</th>
+                    <th>Abfahrt</th>
+                    <th>Ankunft</th>
+                    <th>Fahrzeit</th>
+                    <th>Verspätung</th>
+                    <th>Countdown</th>
+                </tr>
+            </thead>
+            <tbody id="schedule-body-zurich">
+                <!-- Rows will be inserted here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+    <div class="footer" id="refresh-time">Letzte Aktualisierung: Noch nicht aktualisiert</div>
+
+    <script>
+        const apiUrls = {
+            'baden' : 'https://search.ch/fahrplan/api/route.json?from=Baden,%20Badener%20Tor&to=Baden&num=11&pre=1&show_delays=1',
+            'zurich' : 'https://search.ch/fahrplan/api/route.json?from=Baden&to=Z%C3%BCrich,%20HB&num=11&pre=1&show_delays=1'
+        };
+
+        async function fetchAndPersistSchedule(apiUrl, persistFunction) {
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                console.log(data);
+
+                // Persist the response data using the provided persist function
+                persistFunction(data);
+
+                console.log('Schedule data fetched and persisted successfully.');
+            } catch (error) {
+                console.error('Error while fetching and persisting the schedule:', error);
+            }
+        }
+
+        function fillScheduleFromPersistedData(getPersistedDataFunction) {
+            try {
+                // Retrieve the persisted data using the provided function
+                const data = getPersistedDataFunction();
+
+                if (!data || !data.connections) {
+                    console.error('No valid schedule data found.');
+                    return [];
+                }
+
+                // Process the data to fill the schedule
+                return data.connections.flatMap(connection =>
+                    connection.legs.filter(leg => leg.type && leg.type !== 'walk').map(leg => {
+                        // Parse departure time and delay
+                        const departureTime = new Date(leg.departure);
+                        const departureDelay = leg.dep_delay && leg.dep_delay !== '+0' ? parseInt(leg.dep_delay.replace('+', ''), 10) : 0;
+
+                        // Add delay to departure time
+                        departureTime.setMinutes(departureTime.getMinutes() + departureDelay);
+
+                        // Calculate countdown
+                        const currentTime = new Date();
+                        const countdownMs = departureTime - currentTime;
+                        const countdownMinutes = Math.floor(countdownMs / 60000); // Convert milliseconds to minutes
+                        const countdownSeconds = Math.floor((countdownMs % 60000) / 1000); // Get remaining seconds
+
+                        let countdown = 'Departed';
+                        if (countdownMs > 0) {
+                            if (countdownMinutes >= 60) {
+                                const hours = Math.floor(countdownMinutes / 60);
+                                const minutes = countdownMinutes % 60;
+                                countdown = `${hours}h ${minutes}m`;
+                            } else if (countdownMinutes < 15) {
+                                countdown = `${countdownMinutes}m ${countdownSeconds}s`;
+                            } else {
+                                countdown = `${countdownMinutes}m`;
+                            }
+                        }
+
+
+
+                        // Define image mapping for each type and line
+                        const imageMap = {
+                            post: {
+                                '320': 'images/320.png',
+                                '321': 'images/321.png',
+                                '322': 'images/322.png',
+                                '332': 'images/332.png',
+                                '334': 'images/334.png',
+                            },
+                            bus: {
+                                '6': 'images/b6.png',
+                                '7': 'images/b7.png',
+                            },
+                            strain: {
+                                's6': 'images/s6.png',
+                                's12': 'images/s12.png',
+                                's19': 'images/s19.png',
+                            },
+                            express_train: {
+                                'ir36': 'images/ir36.png',
+                                'ir16': 'images/ir16.png',
+                            },
+                        };
+
+                        // Determine the image for the line
+                        const lineImage = leg.line && imageMap[leg.type]?.[leg.line.toLowerCase().replace(' ', '')]
+                            ? `<img src="${imageMap[leg.type][leg.line.toLowerCase().replace(' ', '')]}" alt="${leg.line}" style="height: 16px;">`
+                            : leg.line || 'N/A';
+
+                        return {
+                            from: leg.name.replace('Baden, ', '') || 'N/A',
+                            to: leg.exit?.name.replace('Baden, ', '') || 'N/A',
+                            line: lineImage,
+                            departure: formatTime(leg.departure),
+                            arrival: formatTime(leg.exit?.arrival),
+                            runningTime: `${Math.floor(leg.runningtime / 60)}` || 'N/A',
+                            departureDelay: leg.dep_delay && leg.dep_delay !== '+0' ? leg.dep_delay : '-',
+                            countdown: countdown
+                        };
+                    })
+                );
+            } catch (error) {
+                console.error('Error while filling the schedule from persisted data:', error);
+                return [];
+            }
+        }
+
+        function formatTime(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('current-time').textContent = `${timeString}`;
+        }
+
+        function updateRefreshTime() {
+            const now = new Date();
+            const formattedTime = now.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('refresh-time').textContent = `Letzte Aktualisierung: ${formattedTime}`;
+        }
+
+        function populateTable(tableId, scheduleData) {
+            const tableBody = document.getElementById(tableId);
+            tableBody.innerHTML = ''; // Clear existing rows
+            scheduleData.forEach(data => {
+                const row = document.createElement('tr');
+                Object.entries(data).forEach(([key, value]) => {
+                    const cell = document.createElement('td');
+
+                    // If the value is HTML (like image for the 'line'), use innerHTML
+                    if (key === 'line' && value.includes('<img')) {
+                        cell.innerHTML = value;
+                    } else {
+                        cell.textContent = value;
+                    }
+
+                    if (value === data.departureDelay && value !== '-') {
+                        cell.classList.add('delay');
+                    }
+                    row.appendChild(cell);
+                });
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Function to fetch and persist schedules
+        async function updateSchedulesData() {
+            await Promise.all([
+                fetchAndPersistSchedule(apiUrls.baden, (data) => localStorage.setItem('badenSchedule', JSON.stringify(data))),
+                fetchAndPersistSchedule(apiUrls.zurich, (data) => localStorage.setItem('zurichSchedule', JSON.stringify(data))),
+            ]);
+            console.log('Schedules data updated and persisted.');
+            updateRefreshTime();
+        }
+
+        // Function to populate tables with schedules
+        function updateSchedulesUI() {
+            const badenSchedule = fillScheduleFromPersistedData(() => {
+                const data = localStorage.getItem('badenSchedule');
+                return data ? JSON.parse(data) : null;
+            });
+
+            const zurichSchedule = fillScheduleFromPersistedData(() => {
+                const data = localStorage.getItem('zurichSchedule');
+                return data ? JSON.parse(data) : null;
+            });
+
+            populateTable('schedule-body-baden', badenSchedule);
+            populateTable('schedule-body-zurich', zurichSchedule);
+
+            updateCurrentTime();
+        }
+
+        // Initial calls
+        updateSchedulesData()
+        updateSchedulesUI()
+
+        // Example usage: Call these functions at different intervals
+        setInterval(updateSchedulesData, 90000); // Fetch and persist schedules every 90 seconds
+        setInterval(updateSchedulesUI, 1000);  // Update UI every second
+    </script>
+</body>
+</html>
